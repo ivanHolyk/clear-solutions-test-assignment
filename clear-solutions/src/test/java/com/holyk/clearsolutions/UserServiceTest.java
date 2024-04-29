@@ -96,11 +96,14 @@ class UserServiceTest {
 
 		User user = service.save(userR);
 		service.save(userR);
-
-		long id = user.getId();
 		user.setFirstname("Other");
 		user.setLastname("Lost name");
-		User user2 = service.update(id, user);
+
+		long id = user.getId();
+		UserRecord userToUpdate = new UserRecord("mail", "Other", "Lost name", LocalDate.of(2002, 1, 1), "address",
+				"phone");
+
+		User user2 = service.update(id, userToUpdate);
 
 		assertEquals(user, user2);
 		assertEquals(2, service.getList().size());

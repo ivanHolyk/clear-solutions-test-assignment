@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,7 +38,7 @@ import com.holyk.clearsolutions.exceptions.DateRangeIsNotValidException;
 import com.holyk.clearsolutions.exceptions.UserNotFoundException;
 import com.holyk.clearsolutions.services.UserService;
 
-@SpringBootTest(properties = {"app.user.minimum.age=18"})
+@SpringBootTest(properties = { "app.user.minimum.age=18" })
 class UserControllerTest {
 	@Mock
 	UserService service;
@@ -120,7 +119,7 @@ class UserControllerTest {
 		User userAfter = User.of(userRecordToUpdate);
 		userAfter.setId(1);
 
-		when(service.update(Mockito.anyLong(), Mockito.any(UserRecord.class))).thenReturn(Optional.of(userAfter));
+		when(service.update(Mockito.anyLong(), Mockito.any(UserRecord.class))).thenReturn((userAfter));
 
 		ResponseEntity<User> responseEntity = controller.updateUser(1L, new UserData(userRecord));
 
@@ -137,11 +136,10 @@ class UserControllerTest {
 		UserRecord userRecord = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
 				"phone");
 
-		when(service.update(Mockito.anyLong(), Mockito.any(UserRecord.class))).thenReturn(Optional.empty());
+		when(service.update(Mockito.anyLong(), Mockito.any(UserRecord.class))).thenThrow(UserNotFoundException.class);
 
-		ResponseEntity<User> responseEntity = controller.updateUser(1L, new UserData(userRecord));
+		assertThrows(UserNotFoundException.class, () -> controller.updateUser(1L, new UserData(userRecord)));
 
-		assertEquals(HttpStatus.NOT_FOUND, responseEntity.getStatusCode());
 	}
 
 	@Test
