@@ -1,0 +1,5 @@
+{"properties": [{
+  "name": "app.user.minimum.age",
+  "type": "java.lang.Integer",
+  "description": "This property defines the minimum age requirement for user registration."
+}]}
