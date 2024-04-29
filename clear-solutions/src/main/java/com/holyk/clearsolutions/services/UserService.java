@@ -38,14 +38,18 @@ public class UserService {
 		this.increment = increment;
 	}
 
-	public User update(long id, User user) {
-		list = list.stream().map(u -> {
-			if (u.getId() == id) {
-				return user;
-			}
-			return u;
-		}).toList();
+	private User update(long id, User newUser) {
+
+		User user = checkIfUserExistElseThrow(id);
+		list.set(list.indexOf(user), newUser);
+
 		return user;
+	}
+
+	public User update(long id, UserRecord userR) {
+		User newUser = User.of(userR);
+		newUser.setId(id);
+		return update(id, newUser);
 	}
 
 	public List<User> getUsersByDateRange(LocalDate from, LocalDate to) {
@@ -66,12 +70,6 @@ public class UserService {
 	private boolean isDateBetween(LocalDate date, LocalDate from, LocalDate to) {
 		return from.compareTo(date) * date.compareTo(to) >= 0;
 
-	}
-
-	public Optional<User> update(long id, UserRecord userR) {
-		checkIfUserExistElseThrow(id);
-		// TODO
-		return null;
 	}
 
 	public User patch(long id, JsonPatch patch) throws JsonProcessingException, JsonPatchException {
