@@ -3,7 +3,6 @@ package com.holyk.clearsolutions.controllers;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -94,11 +93,9 @@ public class UserController {
 	public ResponseEntity<User> updateUser(@PathVariable long id, UserData data) {
 
 		UserRecord userR = data.data();
-		Optional<User> optional = service.update(id, userR);
-		if (optional.isEmpty()) {
-			return ResponseEntity.notFound().build();
-		}
-		return ResponseEntity.status(HttpStatus.OK).body(optional.get());
+		User update = service.update(id, userR);
+
+		return ResponseEntity.status(HttpStatus.OK).body(update);
 
 	}
 
