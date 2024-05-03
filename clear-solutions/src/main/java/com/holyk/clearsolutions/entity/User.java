@@ -4,6 +4,8 @@ import java.time.LocalDate;
 import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.holyk.clearsolutions.controllers.UserRequest;
+import com.holyk.clearsolutions.controllers.UserResponse;
 
 public class User {
 
@@ -98,9 +100,31 @@ public class User {
 		this.phone = phone;
 	}
 
-	public static User of(UserRecord userR) {
-		return new User(userR.email(), userR.firstname(), userR.lastname(), userR.birthdate(), userR.address(),
-				userR.phone());
+	private User(long id, String email, String firstname, String lastname, LocalDate birthdate, String address,
+			String phone) {
+
+		super();
+		this.id = id;
+		this.email = email;
+		this.firstname = firstname;
+		this.lastname = lastname;
+		this.birthdate = birthdate;
+		this.address = address;
+		this.phone = phone;
+	}
+
+	public static User of(UserRequest userR) {
+		var data = userR.data();
+
+		return new User(data.email(), data.firstname(), data.lastname(), data.birthdate(), data.address(),
+				data.phone());
+	}
+
+	public static User of(UserResponse response) {
+		var data = response.data();
+
+		return new User(data.id(), data.email(), data.firstname(), data.lastname(), data.birthdate(), data.address(),
+				data.phone());
 	}
 
 	@Override
