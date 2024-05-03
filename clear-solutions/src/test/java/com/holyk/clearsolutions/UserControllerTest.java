@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,11 +32,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.fge.jsonpatch.JsonPatch;
 import com.github.fge.jsonpatch.JsonPatchException;
 import com.holyk.clearsolutions.controllers.UserController;
-import com.holyk.clearsolutions.controllers.UserData;
+import com.holyk.clearsolutions.controllers.UserRequest;
+import com.holyk.clearsolutions.controllers.UserResponse;
 import com.holyk.clearsolutions.entity.User;
-import com.holyk.clearsolutions.entity.UserRecord;
 import com.holyk.clearsolutions.exceptions.DateRangeIsNotValidException;
 import com.holyk.clearsolutions.exceptions.UserNotFoundException;
+import com.holyk.clearsolutions.exceptions.UserNotValidException;
 import com.holyk.clearsolutions.services.UserService;
 
 @SpringBootTest(properties = { "app.user.minimum.age=18" })
@@ -46,11 +48,6 @@ class UserControllerTest {
 	@Autowired
 	UserController controller;
 
-//	@BeforeAll
-//	void setup() {
-//		controller = new UserController(service);
-//	}
-
 	@BeforeEach
 	void init() {
 		MockitoAnnotations.openMocks(this);
@@ -58,31 +55,18 @@ class UserControllerTest {
 
 	@Test
 	void testUserCreation() {
-		UserRecord user = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address", "phone");
-		User user1 = User.of(user);
-		user1.setId(1);
+		UserRequest request = UserRequest.of("mail@mail.com", "firstname", "lastname", LocalDate.of(2002, 1, 1),
+				"address", "phone");
+		User user = User.of(request);
+		user.setId(1);
 
-		when(service.save(Mockito.any(UserRecord.class))).thenReturn(user1);
+		when(service.save(Mockito.any(UserRequest.class))).thenReturn(user);
 
-		ResponseEntity<User> responseEntity = controller.createUser(new UserData(user));
+		ResponseEntity<User> responseEntity = controller.createUser(request);
 
 		User user2 = responseEntity.getBody();
-		assertEquals(user1, user2);
+		assertEquals(user, user2);
 		assertEquals(1, user2.getId());
-	}
-
-	@Test
-	void testUserCreationTooYoung() {
-		UserRecord user = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2012, 1, 1), "address", "phone");
-		User user1 = User.of(user);
-		user1.setId(1);
-
-		when(service.save(Mockito.any(UserRecord.class))).thenReturn(user1);
-
-		ResponseEntity<User> responseEntity = controller.createUser(new UserData(user));
-
-		assertEquals(HttpStatus.FORBIDDEN, responseEntity.getStatusCode());
-
 	}
 
 	@Test
@@ -109,21 +93,21 @@ class UserControllerTest {
 
 	@Test
 	void testUserUpdate() {
-		UserRecord userRecord = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
-				"phone");
-		User userBefore = User.of(userRecord);
+		UserRequest baseRequest = UserRequest.of("mail@mail.com", "firstname", "lastname", LocalDate.of(2002, 1, 1),
+				"address", "phone");
+		User userBefore = User.of(baseRequest);
 		userBefore.setId(1);
 
-		UserRecord userRecordToUpdate = new UserRecord("mail2", "firstname2", "lastname", LocalDate.of(2002, 1, 1),
+		UserRequest payload = UserRequest.of("new_mail@mail.com", "firstname2", "lastname", LocalDate.of(2002, 1, 1),
 				"address", "phone");
-		User userAfter = User.of(userRecordToUpdate);
+		User userAfter = User.of(payload);
 		userAfter.setId(1);
 
-		when(service.update(Mockito.anyLong(), Mockito.any(UserRecord.class))).thenReturn((userAfter));
+		when(service.update(Mockito.anyLong(), Mockito.any(UserRequest.class))).thenReturn((userAfter));
 
-		ResponseEntity<User> responseEntity = controller.updateUser(1L, new UserData(userRecord));
+		ResponseEntity<UserResponse> responseEntity = controller.updateUser(1L, payload);
 
-		User user2 = responseEntity.getBody();
+		User user2 = User.of(responseEntity.getBody());
 		assertNotEquals(userBefore, user2);
 		assertEquals(HttpStatus.OK, responseEntity.getStatusCode());
 		assertEquals(userAfter, user2);
@@ -133,40 +117,39 @@ class UserControllerTest {
 	@Test
 	void testUserUpdateFail() {
 
-		UserRecord userRecord = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
+		UserRequest request = UserRequest.of("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
 				"phone");
 
-		when(service.update(Mockito.anyLong(), Mockito.any(UserRecord.class))).thenThrow(UserNotFoundException.class);
-
-		assertThrows(UserNotFoundException.class, () -> controller.updateUser(1L, new UserData(userRecord)));
+		assertThrows(UserNotValidException.class, () -> controller.updateUser(1L, request));
 
 	}
 
 	@Test
-	void testUserPatchSuccess() throws IOException, JsonPatchException {
-		UserRecord userRecord = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
+	void testUserPatchSuccess() throws IOException, JsonPatchException, NoSuchFieldException, SecurityException,
+			IllegalArgumentException, IllegalAccessException {
+		UserRequest request = UserRequest.of("mail@mail.com", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
 				"phone");
-		User userBefore = User.of(userRecord);
+		User userBefore = User.of(request);
 		userBefore.setId(1);
 
 		ObjectMapper mapper = new ObjectMapper();
 		//@formatter:off
 		JsonNode json = mapper.readTree("[{\"op\": \"replace\","
-				+ "\"path\": \"/1\","
-				+ "\"value\": {"
-					+ "\"email\": \"mail2\"}}]");
+				+ "\"path\": \"/email\","
+				+ "\"value\": \"new_mail@mail.com\"}]");
 		//@formatter:on
 		JsonPatch patch = JsonPatch.fromJson(json);
 
-		User userAfter = User.of(userRecord);
+		User userAfter = User.of(request);
 		userAfter.setEmail("mail2");
 		userAfter.setId(1);
-
+		
+		when(service.findUserById(Mockito.anyLong())).thenReturn(Optional.of(userBefore));
 		when(service.patch(Mockito.anyLong(), Mockito.any(JsonPatch.class))).thenReturn(userAfter);
 
-		ResponseEntity<User> responseEntity = controller.patchUser(1L, patch);
+		ResponseEntity<UserResponse> responseEntity = controller.patchUser(1L, patch);
 
-		User user2 = responseEntity.getBody();
+		User user2 = User.of(responseEntity.getBody());
 		assertNotEquals(userBefore, user2);
 		assertEquals(HttpStatus.OK, responseEntity.getStatusCode());
 		assertEquals(userAfter, user2);
@@ -174,31 +157,16 @@ class UserControllerTest {
 	}
 
 	@Test
-	void testUserPatchFail() throws JsonProcessingException, JsonPatchException {
-		fail("need to be refactor or leave it to integration tests(mockmvc)");
-		when(service.patch(Mockito.anyLong(), Mockito.any(JsonPatch.class))).thenThrow(UserNotFoundException.class);
-
-		try {
-			controller.patchUser(1L, null);
-		} catch (UserNotFoundException e) {
-			System.out.println(e);
-			return;
-		}
-
-//		assertEquals(HttpStatus.NOT_FOUND, responseEntity.getStatusCode());
-	}
-
-	@Test
 	void testUserSelectSuccess() {
 		List<User> list = new ArrayList<User>();
 
-		UserRecord userRecord = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
+		UserRequest request1 = UserRequest.of("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
 				"phone");
-		UserRecord userRecord2 = new UserRecord("mail2", "firstname2", "lastname2", LocalDate.of(2012, 1, 1), "address",
+		UserRequest request2 = UserRequest.of("mail2", "firstname2", "lastname2", LocalDate.of(2012, 1, 1), "address",
 				"phone");
 
-		User user1 = User.of(userRecord);
-		User user2 = User.of(userRecord2);
+		User user1 = User.of(request1);
+		User user2 = User.of(request2);
 		user1.setId(1L);
 		user2.setId(2L);
 		list.add(user1);

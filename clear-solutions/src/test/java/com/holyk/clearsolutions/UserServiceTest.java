@@ -18,8 +18,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.fge.jsonpatch.JsonPatch;
 import com.github.fge.jsonpatch.JsonPatchException;
+import com.holyk.clearsolutions.controllers.UserRequest;
 import com.holyk.clearsolutions.entity.User;
-import com.holyk.clearsolutions.entity.UserRecord;
 import com.holyk.clearsolutions.exceptions.UserNotFoundException;
 import com.holyk.clearsolutions.services.UserService;
 
@@ -28,10 +28,10 @@ class UserServiceTest {
 	@Test
 	void testUserCreate() {
 		UserService service = new UserService();
-		UserRecord userR = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
+		UserRequest request = UserRequest.of("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
 				"phone");
 
-		User user = service.save(userR);
+		User user = service.save(request);
 
 		assertEquals(1, service.getList().size());
 		assertTrue(user.getId() > 0);
@@ -42,11 +42,11 @@ class UserServiceTest {
 	@Test
 	void testUserDelete() {
 		UserService service = new UserService();
-		UserRecord userR = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
+		UserRequest request = UserRequest.of("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
 				"phone");
 
-		User user = service.save(userR);
-		service.save(userR);
+		User user = service.save(request);
+		service.save(request);
 		assertEquals(2, service.getList().size());
 		assertTrue(service.delete(user.getId()));
 		assertEquals(1, service.getList().size());
@@ -57,10 +57,10 @@ class UserServiceTest {
 
 	@Test
 	void testGetUsersByDateRange() {
-		UserRecord userR = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
+		UserRequest request = UserRequest.of("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
 				"phone");
-		User user = User.of(userR);
-		User user2 = User.of(userR);
+		User user = User.of(request);
+		User user2 = User.of(request);
 		user2.setBirthdate(LocalDate.of(2004, 1, 2));
 
 		UserService service = new UserService(List.of(user, user2), 3L);
@@ -91,16 +91,16 @@ class UserServiceTest {
 	@Test
 	void testUserUpdate() {
 		UserService service = new UserService();
-		UserRecord userR = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
+		UserRequest request = UserRequest.of("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
 				"phone");
 
-		User user = service.save(userR);
-		service.save(userR);
+		User user = service.save(request);
+		service.save(request);
 		user.setFirstname("Other");
 		user.setLastname("Lost name");
 
 		long id = user.getId();
-		UserRecord userToUpdate = new UserRecord("mail", "Other", "Lost name", LocalDate.of(2002, 1, 1), "address",
+		UserRequest userToUpdate = UserRequest.of("mail", "Other", "Lost name", LocalDate.of(2002, 1, 1), "address",
 				"phone");
 
 		User user2 = service.update(id, userToUpdate);
@@ -113,11 +113,11 @@ class UserServiceTest {
 	@Test
 	void testUserPatch() throws IOException, JsonPatchException {
 		UserService service = new UserService();
-		UserRecord userR = new UserRecord("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
+		UserRequest request = UserRequest.of("mail", "firstname", "lastname", LocalDate.of(2002, 1, 1), "address",
 				"phone");
 
-		User user = service.save(userR);
-		service.save(userR);
+		User user = service.save(request);
+		service.save(request);
 
 		long id = user.getId();
 		user.setFirstname("Other");
