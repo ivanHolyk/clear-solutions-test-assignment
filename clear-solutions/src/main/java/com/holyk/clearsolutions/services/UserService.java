@@ -13,8 +13,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.fge.jsonpatch.JsonPatch;
 import com.github.fge.jsonpatch.JsonPatchException;
+import com.holyk.clearsolutions.controllers.UserRequest;
 import com.holyk.clearsolutions.entity.User;
-import com.holyk.clearsolutions.entity.UserRecord;
 import com.holyk.clearsolutions.exceptions.UserNotFoundException;
 
 @Service
@@ -43,10 +43,11 @@ public class UserService {
 		User user = checkIfUserExistElseThrow(id);
 		list.set(list.indexOf(user), newUser);
 
-		return user;
+		return newUser;
 	}
 
-	public User update(long id, UserRecord userR) {
+	public User update(long id, UserRequest userR) {
+
 		User newUser = User.of(userR);
 		newUser.setId(id);
 		return update(id, newUser);
@@ -56,7 +57,7 @@ public class UserService {
 		return list.stream().filter(u -> isDateBetween(u.getBirthdate(), from, to)).toList();
 	}
 
-	public User save(UserRecord userR) {
+	public User save(UserRequest userR) {
 		User user = User.of(userR);
 		user.setId(increment++);
 		this.list.add(user);
@@ -94,12 +95,12 @@ public class UserService {
 	private User checkIfUserExistElseThrow(long id) {
 		Optional<User> optional = findUserById(id);
 		if (optional.isEmpty()) {
-			throw new UserNotFoundException();
+			throw new UserNotFoundException("User with id " + id + " not found!");
 		}
 		return optional.get();
 	}
 
-	private Optional<User> findUserById(long id) {
+	public Optional<User> findUserById(long id) {
 		return list.stream().filter(u -> u.getId() == id).findFirst();
 	}
 
