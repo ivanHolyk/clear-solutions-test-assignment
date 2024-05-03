@@ -3,6 +3,7 @@ package com.holyk.clearsolutions.controllers;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,12 +22,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.fge.jsonpatch.JsonPatch;
 import com.github.fge.jsonpatch.JsonPatchException;
 import com.holyk.clearsolutions.entity.User;
-import com.holyk.clearsolutions.entity.UserRecord;
 import com.holyk.clearsolutions.exceptions.DateRangeIsNotValidException;
+import com.holyk.clearsolutions.exceptions.UserAgeNotSatisfyException;
 import com.holyk.clearsolutions.exceptions.UserNotFoundException;
+import com.holyk.clearsolutions.exceptions.UserNotValidException;
+import com.holyk.clearsolutions.exceptions.UserPatchIsNotValidException;
 import com.holyk.clearsolutions.services.UserService;
 
 //@formatter:off
@@ -59,17 +64,15 @@ public class UserController {
 	 * 2.1. Create user. It allows to register users who are more than [18] years
 	 * old. The value [18] should be taken from properties file.
 	 * 
-	 * @param userR
+	 * @param data
+	 * @return
 	 */
 	@PostMapping()
-	public ResponseEntity<User> createUser(@RequestBody UserData data) {
+	public ResponseEntity<User> createUser(@RequestBody UserRequest data) {
 
-		UserRecord userR = data.data();
+		validateUser(data);
 
-		if (!isUserAgeSaitsfy(userR)) {
-			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-		}
-		User user = service.save(userR);
+		User user = service.save(data);
 		return ResponseEntity.status(HttpStatus.CREATED).body(user);
 
 	}
@@ -77,25 +80,31 @@ public class UserController {
 	/**
 	 * 2.2. Update one/some user fields
 	 * 
+	 * @param id
+	 * @param patch
 	 * @return
-	 * @throws JsonPatchException
 	 * @throws JsonProcessingException
+	 * @throws JsonPatchException
 	 */
 	@PatchMapping(path = "/{id}", consumes = "application/json-patch+json")
-	public ResponseEntity<User> patchUser(@PathVariable long id, @RequestBody JsonPatch patch)
+	public ResponseEntity<UserResponse> patchUser(@PathVariable long id, @RequestBody JsonPatch patch)
 			throws JsonProcessingException, JsonPatchException {
+		Optional<User> optional = service.findUserById(id);
+		User user = optional.orElseThrow(() -> new UserNotFoundException("User not found!"));
+
+		validatePatch(patch, user);
+
 		User updateUser = service.patch(id, patch);
-		return ResponseEntity.status(HttpStatus.OK).body(updateUser);
+		return ResponseEntity.status(HttpStatus.OK).body(UserResponse.of(updateUser));
 
 	}
 
 	@PutMapping("/{id}")
-	public ResponseEntity<User> updateUser(@PathVariable long id, UserData data) {
+	public ResponseEntity<UserResponse> updateUser(@PathVariable long id, @RequestBody UserRequest data) {
+		validateUser(data);
+		User update = service.update(id, data);
 
-		UserRecord userR = data.data();
-		User update = service.update(id, userR);
-
-		return ResponseEntity.status(HttpStatus.OK).body(update);
+		return ResponseEntity.status(HttpStatus.OK).body(UserResponse.of(update));
 
 	}
 
@@ -112,7 +121,7 @@ public class UserController {
 	}
 
 	@DeleteMapping("/{id}")
-	public ResponseEntity<?> deleteUser(@PathVariable Long id) {
+	public ResponseEntity<Object> deleteUser(@PathVariable Long id) {
 		boolean success = service.delete(id);
 		if (!success) {
 			return ResponseEntity.notFound().build();
@@ -120,19 +129,97 @@ public class UserController {
 			return ResponseEntity.noContent().build();
 	}
 
-	private void validateRange(LocalDate from, LocalDate to) {
-		if (Period.between(from, to).isNegative())
-			// TODO add controller advice for exception handling
-			throw new DateRangeIsNotValidException();
+	private void validatePatch(JsonPatch patch, User user) throws JsonPatchException, JsonProcessingException {
+
+		ObjectMapper objectMapper = new ObjectMapper();
+		objectMapper.findAndRegisterModules();
+		JsonNode patched = patch.apply(objectMapper.convertValue(user, JsonNode.class));
+
+		User patchedUser = objectMapper.treeToValue(patched, User.class);
+
+		if (//@formatter:off
+			patchedUser.getBirthdate() == null 
+				|| !isBirthdateValid(patchedUser.getBirthdate())
+				|| isNullOrEmpty(patchedUser.getEmail()) 
+				|| !isEmailValid(patchedUser.getEmail())
+				|| isNullOrEmpty(patchedUser.getFirstname())
+				|| isNullOrEmpty(patchedUser.getLastname())
+			//@formatter:on
+		) {
+			throw new UserPatchIsNotValidException("Patch is not valid!");
+		}
+
 	}
 
-	private boolean isUserAgeSaitsfy(UserRecord user) {
+	private void validateUser(UserRequest request) {
+		var data = request.data();
+		var birthdate = data.birthdate();
 
-		return user.birthdate().plusYears(ageRequired).isBefore(LocalDate.now());
+		if (isNullOrEmpty(data.email()) || isNullOrEmpty(data.firstname()) || isNullOrEmpty(data.lastname())
+				|| data.birthdate() == null) {
+			throw new NullPointerException("One or more required fields are null!");
+		}
+
+		if (!isEmailValid(data.email()) || birthdate.isAfter(LocalDate.now())) {
+			throw new UserNotValidException("User is not valid!");
+		}
+
+		if (!isUserAgeSaitsfy(birthdate)) {
+			throw new UserAgeNotSatisfyException("Too young!");
+		}
+
+	}
+
+	private void validateRange(LocalDate from, LocalDate to) {
+		if (from==null||to==null) {
+			throw new NullPointerException("Range of dates is not presented!");
+		}
+		if (Period.between(from, to).isNegative() || to.isAfter(LocalDate.now()))
+			throw new DateRangeIsNotValidException("Range of dates is not valid!");
+
+		/**
+		 * Meant to be unreachable lol
+		 */
+		if (from.isBefore(LocalDate.of(1900, 1, 1)) && to.isAfter(LocalDate.now())) {
+			throw new DateRangeIsNotValidException("І мертвим, і живим, і ненародженим...");
+
+		}
+	}
+
+	private boolean isUserAgeSaitsfy(LocalDate birthdate) {
+		return birthdate.plusYears(ageRequired).isBefore(LocalDate.now());
+	}
+
+	private boolean isEmailValid(String email) {
+		return email.matches("^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$");
+	}
+
+	private boolean isNullOrEmpty(String string) {
+		return string == null || "".equals(string);
+	}
+
+	private boolean isBirthdateValid(LocalDate birthdate) {
+		return birthdate != null && birthdate.isBefore(LocalDate.now()) && isUserAgeSaitsfy(birthdate);
+	}
+
+	@ExceptionHandler(value = { DateRangeIsNotValidException.class, NullPointerException.class,
+			UserPatchIsNotValidException.class, UserNotValidException.class })
+	public ResponseEntity<UserErrorResponse> handle(RuntimeException ex) {
+
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+				.body(new UserErrorResponse(HttpStatus.BAD_REQUEST.toString(), ex.getMessage()));
 	}
 
 	@ExceptionHandler
-	public ResponseEntity<String> handle(UserNotFoundException ex) {
-		return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found!");
+	public ResponseEntity<UserErrorResponse> handle(UserAgeNotSatisfyException ex) {
+		return ResponseEntity.status(HttpStatus.FORBIDDEN)
+				.body(new UserErrorResponse(HttpStatus.FORBIDDEN.toString(), ex.getMessage()));
 	}
+
+	@ExceptionHandler
+	public ResponseEntity<UserErrorResponse> handle(UserNotFoundException ex) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND)
+				.body(new UserErrorResponse(HttpStatus.NOT_FOUND.toString(), ex.getMessage()));
+	}
+
 }
